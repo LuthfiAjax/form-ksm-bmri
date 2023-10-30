@@ -1,5 +1,5 @@
 function populateCabangSelect() {
-	const baseurl = "https://bmri.pullpick.com/";
+	const baseurl = "http://bmri.pullpick.com/";
 	const selectElement = $("#cabangSelect");
 	const namaCabangInput = $("#namacabang");
 	const areaCabangInput = $("#areacabang");

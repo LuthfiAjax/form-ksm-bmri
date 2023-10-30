@@ -56,9 +56,14 @@ class Restfull extends CI_Controller
         header("Access-Control-Allow-Headers: Content-Type");
         $key = $this->input->post('keyword');
 
-        $query = $this->db->select('NAMA_NASABAH, COUNT_CIF, INDIKATIF')->where('KD_CABANG', $kd)->like('NAMA_K_L', $key)->get('tb_cabang')->result_array();
+        $query = $this->db->select('NAMA_NASABAH, SUM(COUNT_CIF) as COUNT_CIF, SUM(INDIKATIF) as INDIKATIF')->group_by('NAMA_NASABAH')->where('KD_CABANG', $kd)->like('NAMA_K_L', $key)->get('tb_cabang')->result_array();
 
         if ($query) {
+            // Mengubah format angka INDIKATIF menjadi format rupiah
+            foreach ($query as &$row) {
+                $row['INDIKATIF'] = 'Rp. ' . number_format($row['INDIKATIF'], 0, ',', '.');
+            }
+
             header("Content-Type: application/json");
             echo json_encode($query);
         } else {
@@ -109,7 +114,7 @@ class Restfull extends CI_Controller
 
         if ($this->upload->do_upload('dokumentasi')) {
             $img_dok = $this->upload->data();
-            $dokumentasi = $img_dok['file_name'];
+            $dokumentasi = base_url('assets/doc/') . $img_dok['file_name'];
 
             $image_path_dok = $config['upload_path'] . $img_dok['file_name'];
             $this->reduce_image_quality($image_path_dok, 80);
@@ -132,7 +137,7 @@ class Restfull extends CI_Controller
             'NO_HP_NASABAH' => $nomorhpnasabah,
             'STATUS_BERMINAT' => $minat,
             'BERMINAT_APLIKASI_MELALUI' => $melalui,
-            'DOKUMENTASI_KUNJUNGAN' => base_url('assets/doc/') . $dokumentasi,
+            'DOKUMENTASI_KUNJUNGAN' =>  $dokumentasi,
             'BLM_BERMINAT_ALASAN' => $alasan,
             'NAMA_PIC' => $namapic,
             'JABATAN_PIC' => $jabatanpic,
