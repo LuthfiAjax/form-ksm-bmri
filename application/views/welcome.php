@@ -106,14 +106,31 @@
 						</div>
 
 						<!-- Navigation Buttons -->
+						<style>
+							@media (max-width: 767px) {
+								.row-button {
+									flex-wrap: nowrap;
+								}
+
+								.sebelumnya,
+								.berikutnya {
+									flex-basis: 50%;
+									max-width: 50%;
+								}
+
+								.berikutnya {
+									margin-left: auto;
+								}
+							}
+						</style>
 						<div class="mb-3">
-							<div class="row">
-								<div class="col-lg-4">
+							<div class="row row-button">
+								<div class="col-lg-4 sebelumnya">
 									<div class="hide mt-3" id="hide" style="display: none">
 										<button class="btn btn-danger d-grid w-100" type="button" id="prevBtn">Sebelumnya</button>
 									</div>
 								</div>
-								<div class="col-lg-8">
+								<div class="col-lg-8 berikutnya">
 									<div class="hideberikut mt-3" id="hideberikut">
 										<button class="btn btn-primary d-grid w-100" type="button" id="nextBtn">Berikutnya</button>
 									</div>

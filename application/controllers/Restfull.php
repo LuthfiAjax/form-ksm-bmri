@@ -1,5 +1,6 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
+date_default_timezone_set('Asia/Jakarta');
 
 class Restfull extends CI_Controller
 {
@@ -54,21 +55,36 @@ class Restfull extends CI_Controller
     {
         header("Access-Control-Allow-Origin: *");
         header("Access-Control-Allow-Headers: Content-Type");
-        $key = $this->input->post('keyword');
 
-        $query = $this->db->select('NAMA_NASABAH, SUM(COUNT_CIF) as COUNT_CIF, SUM(INDIKATIF) as INDIKATIF')->group_by('NAMA_NASABAH')->where('KD_CABANG', $kd)->like('NAMA_K_L', $key)->get('tb_cabang')->result_array();
+        // Mengambil data JSON dari permintaan POST
+        $input_data = file_get_contents('php://input');
+        $json_data = json_decode($input_data);
 
-        if ($query) {
-            // Mengubah format angka INDIKATIF menjadi format rupiah
-            foreach ($query as &$row) {
-                $row['INDIKATIF'] = 'Rp. ' . number_format($row['INDIKATIF'], 0, ',', '.');
+        if ($json_data && isset($json_data->keyword)) {
+            $key = $json_data->keyword;
+
+            $query = $this->db->select('NAMA_NASABAH, SUM(COUNT_CIF) as COUNT_CIF, SUM(INDIKATIF) as INDIKATIF')
+                ->where('KD_CABANG', $kd)
+                ->where('NAMA_K_L', $key)
+                ->group_by('NAMA_NASABAH')
+                ->get('tb_cabang')
+                ->result_array();
+
+            if ($query) {
+                // Mengubah format angka INDIKATIF menjadi format rupiah
+                foreach ($query as &$row) {
+                    $row['INDIKATIF'] = 'Rp. ' . number_format($row['INDIKATIF'], 0, ',', '.');
+                }
+
+                header("Content-Type: application/json");
+                echo json_encode($query);
+            } else {
+                header("HTTP/1.1 404 Not Found");
+                echo json_encode(["message" => "Data not found"]);
             }
-
-            header("Content-Type: application/json");
-            echo json_encode($query);
         } else {
-            header("HTTP/1.1 404 Not Found");
-            echo json_encode(["message" => "Data not found"]);
+            header("HTTP/1.1 400 Bad Request");
+            echo json_encode(["message" => "Invalid JSON data"]);
         }
     }
 
@@ -89,8 +105,21 @@ class Restfull extends CI_Controller
         $namapic = $this->input->post('namapic');
         $jabatanpic = $this->input->post('jabatanpic');
 
-        $melalui = $this->input->post('melalui') ?: 'N/A';
         $alasan = $this->input->post('alasan') ?: 'N/A';
+
+        $aplikasi = $this->input->post('aplikasi') ?: 'N/A';
+        $cif = $this->input->post('cif') ?: 'N/A';
+        $melalui = $this->input->post('melalui') ?: 'N/A';
+
+        if (!is_array($aplikasi)) {
+            $aplikasi = array($aplikasi);
+        }
+        if (!is_array($cif)) {
+            $cif = array($cif);
+        }
+        if (!is_array($melalui)) {
+            $melalui = array($melalui);
+        }
 
         $bukti = $_FILES['bukti']['name'];
         $dokumentasi = isset($_FILES['dokumentasi']['name']) ? $_FILES['dokumentasi']['name'] : null;
@@ -105,7 +134,6 @@ class Restfull extends CI_Controller
         if ($this->upload->do_upload('bukti')) {
             $img = $this->upload->data();
             $bukti = $img['file_name'];
-
             $image_path = $config['upload_path'] . $img['file_name'];
             $this->reduce_image_quality($image_path, 80);
         } else {
@@ -115,56 +143,69 @@ class Restfull extends CI_Controller
         if ($this->upload->do_upload('dokumentasi')) {
             $img_dok = $this->upload->data();
             $dokumentasi = base_url('assets/doc/') . $img_dok['file_name'];
-
             $image_path_dok = $config['upload_path'] . $img_dok['file_name'];
             $this->reduce_image_quality($image_path_dok, 80);
         } else {
             $dokumentasi = 'N/A';
         }
 
-
-        $data = array(
-            'KD_CABANG' => $kodecabang,
-            'NM_CABANG' => $namacabang,
-            'AREA' => $areacabang,
-            'REGION' => $regioncabang,
-            'NM_KELOLAAN' => $kelolaanselect,
-            'SATKER' => $satker,
-            'LEADS' => $leadscabang,
-            'LIMIT_INDIKATIF' => $indikatifcabang,
-            'NM_NASABAH' => $namanasabah,
-            'JABATAN_NASABAH' => $jabatannasabah,
-            'NO_HP_NASABAH' => $nomorhpnasabah,
-            'STATUS_BERMINAT' => $minat,
-            'BERMINAT_APLIKASI_MELALUI' => $melalui,
-            'DOKUMENTASI_KUNJUNGAN' =>  $dokumentasi,
-            'BLM_BERMINAT_ALASAN' => $alasan,
-            'NAMA_PIC' => $namapic,
-            'JABATAN_PIC' => $jabatanpic,
-            'BUKTI_KUNJUNGAN' => base_url('assets/doc/') . $bukti
-        );
-
-        $json_data = json_encode($data);
         $api_url = 'https://script.google.com/macros/s/AKfycbwh84CMGMB6jOuWewhclRvYhYzTXtcz-K9F0TMcG2lgy-RnfLtqMfay1erTJVLJoCs/exec';
-
         $options = array(
             CURLOPT_URL => $api_url,
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CUSTOMREQUEST => 'POST',
             CURLOPT_HTTPHEADER => array('Content-Type: application/json'),
-            CURLOPT_POSTFIELDS => $json_data
         );
 
         $curl = curl_init();
-        curl_setopt_array($curl, $options);
-        $response = curl_exec($curl);
+        $response_array = array();
 
-        if (!$response) {
-            echo 'Error: ' . curl_error($curl);
+        for ($i = 0; $i < count($aplikasi); $i++) {
+            $data = array(
+                'KD_CABANG' => $kodecabang,
+                'NM_CABANG' => $namacabang,
+                'AREA' => $areacabang,
+                'REGION' => $regioncabang,
+                'NM_KELOLAAN' => $kelolaanselect,
+                'SATKER' => $satker,
+                'LEADS' => $leadscabang,
+                'LIMIT_INDIKATIF' => $indikatifcabang,
+                'NM_NASABAH' => $namanasabah,
+                'JABATAN_NASABAH' => $jabatannasabah,
+                'NO_HP_NASABAH' => $nomorhpnasabah,
+                'STATUS_BERMINAT' => $minat,
+                'BERMINAT_APLIKASI_MELALUI' => isset($melalui[$i]) ? $melalui[$i] : 'N/A',
+                'DOKUMENTASI_KUNJUNGAN' => $dokumentasi,
+                'BLM_BERMINAT_ALASAN' => $alasan,
+                'NAMA_PIC' => $namapic,
+                'JABATAN_PIC' => $jabatanpic,
+                'BUKTI_KUNJUNGAN' => base_url('assets/doc/') . $bukti,
+                'NOMOR_APLIKASI' => $aplikasi[$i],
+                'CIF' => $cif[$i],
+            );
+
+            $json_data = json_encode($data);
+
+            curl_setopt($curl, CURLOPT_POSTFIELDS, $json_data);
+            curl_setopt_array($curl, $options);
+
+            $response = curl_exec($curl);
+            $http_code = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+
+            if ($http_code != 200) {
+                $all_requests_successful = false;
+            }
+
+            $response_array[] = $response;
+        }
+
+        curl_close($curl);
+
+        if ($all_requests_successful) {
+            redirect(base_url('success'));
         } else {
             redirect(base_url('success'));
         }
-        curl_close($curl);
     }
 
 
